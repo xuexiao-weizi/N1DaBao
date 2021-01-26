@@ -43,7 +43,7 @@ echo "Use $OPWRT_ROOTFS_GZ for openwrt rootfs!"
 ###########################################################################
 
 # 目标镜像文件
-TGT_IMG="${WORK_DIR}/N1_Openwrt_${OPENWRT_VER}_k${KERNEL_VERSION}${SUBVER}.img"
+TGT_IMG="${WORK_DIR}/N1_51_Openwrt.img"
 
 # 可选参数：是否替换n1的dtb文件 y:替换 n:不替换
 REPLACE_DTB="n"
@@ -120,12 +120,12 @@ else
 	exit 1
 fi
 
-if mkfs.vfat --help 1>/dev/nul 2>&1;then
-	echo "check mkfs.vfat ok"
-else
-	echo "mkfs.vfat 程序不存在，请安装 dosfstools"
-	exit 1
-fi
+#if mkfs.vfat --help 1>/dev/nul 2>&1;then
+#	echo "check mkfs.vfat ok"
+#else
+#	echo "mkfs.vfat 程序不存在，请安装 dosfstools"
+#	exit 1
+#fi
 
 if uuidgen>/dev/null;then
 	echo "check uuidgen ok"
@@ -163,11 +163,11 @@ mkdir $LINUX_BOOT $LINUX_ROOT
 
 # mount & tar xf
 echo "挂载 Armbian 镜像 ... "
-losetup -D
-losetup -f -P $LNX_IMG
-BLK_DEV=$(losetup | grep "$LNX_IMG" | head -n 1 | gawk '{print $1}')
-mount -o ro ${BLK_DEV}p1 $LINUX_BOOT
-mount -o ro ${BLK_DEV}p2 $LINUX_ROOT
+sudo losetup -D
+sudo losetup -f -P $LNX_IMG
+BLK_DEV=$(sudo losetup | grep "$LNX_IMG" | head -n 1 | gawk '{print $1}')
+sudo mount -o ro ${BLK_DEV}p1 $LINUX_BOOT
+sudo mount -o ro ${BLK_DEV}p2 $LINUX_ROOT
 
 # mk tgt_img
 echo "创建空白的目标镜像文件 ..."
@@ -178,29 +178,29 @@ SIZE=$((SKIP_MB + BOOT_MB + ROOTFS_MB))
 echo $SIZE
 
 dd if=/dev/zero of=$TGT_IMG bs=1M count=$SIZE
-losetup -f -P $TGT_IMG
-TGT_DEV=$(losetup | grep "$TGT_IMG" | gawk '{print $1}')
+sudo losetup -f -P $TGT_IMG
+TGT_DEV=$(sudo losetup | grep "$TGT_IMG" | gawk '{print $1}')
 
 echo "创建磁盘分区和文件系统 ..."
-parted -s $TGT_DEV mklabel msdos 2>/dev/null
+sudo parted $TGT_DEV mklabel msdos
 BEGIN=$((SKIP_MB * 1024 * 1024))
 END=$(( BOOT_MB * 1024 * 1024 + BEGIN -1))
-parted -s $TGT_DEV mkpart primary fat32 ${BEGIN}b ${END}b 2>/dev/null
+sudo parted $TGT_DEV mkpart primary fat32 ${BEGIN}b ${END}b
 BEGIN=$((END + 1))
 END=$((ROOTFS_MB * 1024 * 1024 + BEGIN -1))
-parted -s $TGT_DEV mkpart primary btrfs ${BEGIN}b 100% 2>/dev/null
-parted -s $TGT_DEV print 2>/dev/null
-mkfs.vfat -n BOOT ${TGT_DEV}p1
+sudo parted $TGT_DEV mkpart primary btrfs ${BEGIN}b 100%
+sudo parted $TGT_DEV print 2>/dev/null
+sudo mkfs.vfat -n BOOT ${TGT_DEV}p1
 ROOTFS_UUID=$(uuidgen)
 echo "ROOTFS_UUID = $ROOTFS_UUID"
-mkfs.btrfs -U ${ROOTFS_UUID} -L ROOTFS -m single ${TGT_DEV}p2
+sudo mkfs.btrfs -U ${ROOTFS_UUID} -L ROOTFS -m single ${TGT_DEV}p2
 
 echo "挂载目标设备 ..."
 TGT_BOOT=${TEMP_DIR}/tgt_boot
 TGT_ROOT=${TEMP_DIR}/tgt_root
-mkdir $TGT_BOOT $TGT_ROOT
-mount -t vfat ${TGT_DEV}p1 $TGT_BOOT
-mount -t btrfs -o compress=zstd ${TGT_DEV}p2 $TGT_ROOT
+sudo mkdir $TGT_BOOT $TGT_ROOT
+sudo mount -t vfat ${TGT_DEV}p1 $TGT_BOOT
+sudo mount -t btrfs -o compress=zstd ${TGT_DEV}p2 $TGT_ROOT
 
 # extract boot
 echo "boot 文件解包 ... "
@@ -208,27 +208,27 @@ cd $TEMP_DIR/$LINUX_BOOT
 #if [ -f "${BOOT_TGZ}" ];then
 #	( cd $TGT_BOOT; tar xvzf "${BOOT_TGZ}" )
 #else
-	tar cf - . | (cd $TGT_BOOT; tar xf - )
+	sudo tar cf - . | (cd $TGT_BOOT; sudo tar xf - )
 #fi
 
 echo "openwrt 根文件系统解包 ... "
 (
   cd $TGT_ROOT && \
-	  tar xzf $OPWRT_ROOTFS_GZ && \
-	  rm -rf ./lib/firmware/* ./lib/modules/* && \
-	  mkdir -p .reserved boot rom proc sys run
+	  sudo tar xzf $OPWRT_ROOTFS_GZ && \
+	  sudo rm -rf ./lib/firmware/* ./lib/modules/* && \
+	  sudo mkdir -p .reserved boot rom proc sys run
 )
 
 echo "Armbian 根文件系统解包 ... "
 cd $TEMP_DIR/$LINUX_ROOT && \
-	tar cf - ./etc/armbian* ./etc/default/armbian* ./etc/default/cpufreq* ./lib/init ./lib/lsb ./lib/firmware ./usr/lib/armbian | (cd ${TGT_ROOT}; tar xf -)
+	sudo tar cf - ./etc/armbian* ./etc/default/armbian* ./etc/default/cpufreq* ./lib/init ./lib/lsb ./lib/firmware ./usr/lib/armbian | (cd ${TGT_ROOT}; sudo tar xf -)
 
 echo "内核模块解包 ... "
 cd $TEMP_DIR/$LINUX_ROOT
 #if [ -f "${MODULES_TGZ}" ];then
 #	(cd ${TGT_ROOT}/lib/modules; tar xvzf "${MODULES_TGZ}")
 #else
-	tar cf - ./lib/modules | ( cd ${TGT_ROOT}; tar xf - )
+	sudo tar cf - ./lib/modules | ( cd ${TGT_ROOT}; sudo tar xf - )
 #fi
 
 while :;do
@@ -246,8 +246,8 @@ done
 echo "修改引导分区相关配置 ... "
 # modify boot
 cd $TGT_BOOT
-rm -f uEnv.ini
-cat > uEnv.txt <<EOF
+sudo rm -f uEnv.ini
+sudo tee uEnv.txt >/dev/null  <<EOF
 LINUX=/zImage
 INITRD=/uInitrd
 
@@ -276,7 +276,7 @@ APPEND=root=UUID=${ROOTFS_UUID} rootfstype=btrfs rootflags=compress=zstd console
 EOF
 
 # 替换dtb文件
-[ "$REPLACE_DTB" == "y" ] && [ -f "$DTB_FILE" ] && cp "$DTB_FILE" ./dtb/amlogic/
+[ "$REPLACE_DTB" == "y" ] && [ -f "$DTB_FILE" ] && sudo cp "$DTB_FILE" ./dtb/amlogic/
 
 echo "uEnv.txt --->"
 cat uEnv.txt
@@ -285,85 +285,85 @@ echo "修改根文件系统相关配置 ... "
 # modify root
 cd $TGT_ROOT
 
-[ -f $BTLD_BIN ] && cp $BTLD_BIN root/
-[ -f $INST_SCRIPT ] && cp $INST_SCRIPT root/
-[ -f $UPDATE_SCRIPT ] && cp $UPDATE_SCRIPT root/
-[ -f $MAC_SCRIPT1 ] && cp $MAC_SCRIPT1 usr/bin/
-[ -f $MAC_SCRIPT2 ] && cp $MAC_SCRIPT2 usr/bin/
-[ -f $MAC_SCRIPT3 ] && cp $MAC_SCRIPT3 usr/bin/
-[ -f $DAEMON_JSON ] && mkdir -p "etc/docker" && cp $DAEMON_JSON "etc/docker/daemon.json"
-[ -f $COREMARK ] && [ -f "etc/coremark.sh" ] && cp -f $COREMARK "etc/coremark.sh" && chmod 755 "etc/coremark.sh"
+[ -f $BTLD_BIN ] && sudo cp $BTLD_BIN root/
+[ -f $INST_SCRIPT ] && sudo cp $INST_SCRIPT root/
+[ -f $UPDATE_SCRIPT ] && sudo cp $UPDATE_SCRIPT root/
+[ -f $MAC_SCRIPT1 ] && sudo cp $MAC_SCRIPT1 usr/bin/
+[ -f $MAC_SCRIPT2 ] && sudo cp $MAC_SCRIPT2 usr/bin/
+[ -f $MAC_SCRIPT3 ] && sudo cp $MAC_SCRIPT3 usr/bin/
+[ -f $DAEMON_JSON ] && sudo mkdir -p "etc/docker" && sudo cp $DAEMON_JSON "etc/docker/daemon.json"
+[ -f $COREMARK ] && [ -f "etc/coremark.sh" ] && sudo cp -f $COREMARK "etc/coremark.sh" && sudo chmod 755 "etc/coremark.sh"
 if [ -x usr/bin/perl ];then
-	[ -f $CPUSTAT_SCRIPT ] && cp $CPUSTAT_SCRIPT usr/bin/
-	[ -f $GETCPU_SCRIPT ] && cp $GETCPU_SCRIPT bin/
+	[ -f $CPUSTAT_SCRIPT ] && sudo cp $CPUSTAT_SCRIPT usr/bin/
+	[ -f $GETCPU_SCRIPT ] && sudo cp $GETCPU_SCRIPT bin/
 else
-	[ -f $CPUSTAT_SCRIPT_PY ] && cp $CPUSTAT_SCRIPT_PY usr/bin/cpustat
+	[ -f $CPUSTAT_SCRIPT_PY ] && sudo cp $CPUSTAT_SCRIPT_PY usr/bin/cpustat
 fi
-[ -f $TTYD ] && cp $TTYD etc/init.d/
-[ -f $FLIPPY ] && cp $FLIPPY usr/sbin/
+[ -f $TTYD ] && sudo cp $TTYD etc/init.d/
+[ -f $FLIPPY ] && sudo cp $FLIPPY usr/sbin/
 if [ -f $BANNER ];then
-    cp -f $BANNER etc/banner
-    echo " Base on OpenWrt ${OPENWRT_VER} by lean & lienol" >> etc/banner
-    echo " Kernel ${KERNEL_VERSION}" >> etc/banner
+    sudo cp -f $BANNER etc/banner
+    sudo echo " Base on OpenWrt ${OPENWRT_VER} by lean & lienol" >> etc/banner
+    sudo echo " Kernel ${KERNEL_VERSION}" >> etc/banner
     TODAY=$(date +%Y-%m-%d)
-    echo " Packaged by flippy on $TODAY" >> etc/banner
-    echo >> etc/banner
+    sudo echo " Packaged by flippy on $TODAY" >> etc/banner
+    sudo echo >> etc/banner
 fi
 
 if [ -f $BAL_ETH_IRQ ];then
-    cp -v $BAL_ETH_IRQ usr/sbin
-    chmod 755 usr/sbin/balethirq.pl
-    sed -e "/exit/i\/usr/sbin/balethirq.pl" -i etc/rc.local
-    [ -f ${BAL_CONFIG} ] && cp -v ${BAL_CONFIG} etc/config/
+    sudo cp -v $BAL_ETH_IRQ usr/sbin
+    sudo chmod 755 usr/sbin/balethirq.pl
+    sudo sed -e "/exit/i\/usr/sbin/balethirq.pl" -i etc/rc.local
+    [ -f ${BAL_CONFIG} ] && sudo cp -v ${BAL_CONFIG} etc/config/
 fi
 
 if [ -f $FIX_CPU_FREQ ];then
-    cp -v $FIX_CPU_FREQ usr/sbin
-    chmod 755 usr/sbin/fixcpufreq.pl
+    sudo cp -v $FIX_CPU_FREQ usr/sbin
+    sudo chmod 755 usr/sbin/fixcpufreq.pl
 fi
 if [ -f $SYSFIXTIME_PATCH ];then
-    patch -p1 < $SYSFIXTIME_PATCH
+    sudo patch -p1 < $SYSFIXTIME_PATCH
 fi
 if [ -f $SSL_CNF_PATCH ];then
-    patch -p1 < $SSL_CNF_PATCH
+    sudo patch -p1 < $SSL_CNF_PATCH
 fi
 
-[ -d ${FMW_HOME} ] && cp -a ${FMW_HOME}/* lib/firmware/
-[ -f ${SYSCTL_CUSTOM_CONF} ] && cp ${SYSCTL_CUSTOM_CONF} etc/sysctl.d/
-[ -d boot ] || mkdir -p boot
-[ -d overlay ] || mkdir -p overlay
-[ -d rom ] || mkdir -p rom
-[ -d sys ] || mkdir -p sys
-[ -d proc ] || mkdir -p proc
-[ -d run ] || mkdir -p run
-sed -e 's/ttyAMA0/ttyAML0/' -i ./etc/inittab
-sed -e 's/ttyS0/tty0/' -i ./etc/inittab
-sed -e 's/\/opt/\/etc/' -i ./etc/config/qbittorrent
-patch -p0 < "${RC_BOOT_PATCH}"
-sed -e "s/#PermitRootLogin prohibit-password/PermitRootLogin yes/" -i ./etc/ssh/sshd_config 2>/dev/null
+[ -d ${FMW_HOME} ] && sudo cp -a ${FMW_HOME}/* lib/firmware/
+[ -f ${SYSCTL_CUSTOM_CONF} ] && sudo cp ${SYSCTL_CUSTOM_CONF} etc/sysctl.d/
+[ -d boot ] || sudo mkdir -p boot
+[ -d overlay ] || sudo mkdir -p overlay
+[ -d rom ] || sudo mkdir -p rom
+[ -d sys ] || sudo mkdir -p sys
+[ -d proc ] || sudo mkdir -p proc
+[ -d run ] || sudo mkdir -p run
+sudo sed -e 's/ttyAMA0/ttyAML0/' -i ./etc/inittab
+sudo sed -e 's/ttyS0/tty0/' -i ./etc/inittab
+sudo sed -e 's/\/opt/\/etc/' -i ./etc/config/qbittorrent
+sudo patch -p0 < "${RC_BOOT_PATCH}"
+sudo sed -e "s/#PermitRootLogin prohibit-password/PermitRootLogin yes/" -i ./etc/ssh/sshd_config 2>/dev/null
 sss=$(date +%s)
 ddd=$((sss/86400))
-sed -e "s/:0:0:99999:7:::/:${ddd}:0:99999:7:::/" -i ./etc/shadow
-sed -e 's/root::/root:$1$NA6OM0Li$99nh752vw4oe7A.gkm2xk1:/' -i ./etc/shadow
+sudo sed -e "s/:0:0:99999:7:::/:${ddd}:0:99999:7:::/" -i ./etc/shadow
+sudo sed -e 's/root::/root:$1$NA6OM0Li$99nh752vw4oe7A.gkm2xk1:/' -i ./etc/shadow
 
 # for collectd
 #[ -f ./etc/ppp/options-opkg ] && mv ./etc/ppp/options-opkg ./etc/ppp/options
 
 # for cifsd
-[ -f ./etc/init.d/cifsd ] && rm -f ./etc/rc.d/S98samba4
+[ -f ./etc/init.d/cifsd ] && sudo rm -f ./etc/rc.d/S98samba4
 # for smbd
-[ -f ./etc/init.d/smbd ] && rm -f ./etc/rc.d/S98samba4
+[ -f ./etc/init.d/smbd ] && sudo rm -f ./etc/rc.d/S98samba4
 # for ksmbd
-[ -f ./etc/init.d/ksmbd ] && rm -f ./etc/rc.d/S98samba4 && sed -e 's/modprobe ksmbd/sleep 1 \&\& modprobe ksmbd/' -i ./etc/init.d/ksmbd
+[ -f ./etc/init.d/ksmbd ] && sudo rm -f ./etc/rc.d/S98samba4 && sudo sed -e 's/modprobe ksmbd/sleep 1 \&\& modprobe ksmbd/' -i ./etc/init.d/ksmbd
 # for samba4 enable smbv1 protocol
 [ -f ./etc/config/samba4 ] && \
-	sed -e 's/services/nas/g' -i ./usr/lib/lua/luci/controller/samba4.lua && \
+	sudo sed -e 's/services/nas/g' -i ./usr/lib/lua/luci/controller/samba4.lua && \
 	[ -f ${SMB4_PATCH} ] && \
-	patch -p1 < ${SMB4_PATCH}
+	sudo patch -p1 < ${SMB4_PATCH}
 # for nfs server
 if [ -f ./etc/init.d/nfsd ];then
-    echo "/mnt/mmcblk1p3 *(rw,sync,no_root_squash,insecure,no_subtree_check)" > ./etc/exports
-    cat > ./etc/config/nfs <<EOF
+    sudo echo "/mnt/mmcblk1p3 *(rw,sync,no_root_squash,insecure,no_subtree_check)" > ./etc/exports
+    sudo tee > ./etc/config/nfs <<EOF
 config share
 	option clients '*'
 	option enabled '1'
@@ -372,15 +372,15 @@ config share
 EOF
 fi
 
-chmod 755 ./etc/init.d/*
+sudo chmod 755 ./etc/init.d/*
 
-sed -e "s/START=25/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
-sed -e "s/START=90/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
-sed -e "s/option wan_mode 'false'/option wan_mode 'true'/" -i ./etc/config/dockerman 2>/dev/null
-mv -f ./etc/rc.d/S??dockerd ./etc/rc.d/S99dockerd 2>/dev/null
-rm -f ./etc/rc.d/S80nginx 2>/dev/null
+sudo sed -e "s/START=25/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
+sudo sed -e "s/START=90/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
+sudo sed -e "s/option wan_mode 'false'/option wan_mode 'true'/" -i ./etc/config/dockerman 2>/dev/null
+sudo mv -f ./etc/rc.d/S??dockerd ./etc/rc.d/S99dockerd 2>/dev/null
+sudo rm -f ./etc/rc.d/S80nginx 2>/dev/null
 
-cat > ./etc/fstab <<EOF
+sudo tee > ./etc/fstab <<EOF
 UUID=${ROOTFS_UUID} / btrfs compress=zstd 0 1
 LABEL=BOOT /boot vfat defaults 0 2
 #tmpfs /tmp tmpfs defaults,nosuid 0 0
@@ -388,7 +388,7 @@ EOF
 echo "/etc/fstab --->"
 cat ./etc/fstab
 
-cat > ./etc/config/fstab <<EOF
+sudo tee > ./etc/config/fstab <<EOF
 config global
         option anon_swap '0'
         option auto_swap '0'
@@ -415,8 +415,8 @@ EOF
 echo "/etc/config/fstab --->"
 cat ./etc/config/fstab
 
-mkdir -p ./etc/modprobe.d
-cat > ./etc/modprobe.d/99-local.conf <<EOF
+sudo mkdir -p ./etc/modprobe.d
+sudo bash -c 'cat > ./etc/modprobe.d/99-local.conf <<EOF
 blacklist meson_gxbb_wdt
 blacklist snd_soc_meson_aiu_i2s
 alias brnf br_netfilter
@@ -425,66 +425,66 @@ alias wifi brcmfmac
 EOF
 
 # echo br_netfilter > ./etc/modules.d/br_netfilter
-echo pwm_meson > ./etc/modules.d/pwm_meson
+sudo echo pwm_meson > ./etc/modules.d/pwm_meson
 
-mkdir ./etc/modules.d.remove
+sudo mkdir ./etc/modules.d.remove
 mod_blacklist=$(cat ${KMOD_BLACKLIST})
 for mod in $mod_blacklist ;do
-	mv -f ./etc/modules.d/${mod} ./etc/modules.d.remove/ 2>/dev/null
+	sudo mv -f ./etc/modules.d/${mod} ./etc/modules.d.remove/ 2>/dev/null
 done
-[ -f ./etc/modules.d/usb-net-asix-ax88179 ] || echo "ax88179_178a" > ./etc/modules.d/usb-net-asix-ax88179
+[ -f ./etc/modules.d/usb-net-asix-ax88179 ] || sudo echo "ax88179_178a" > ./etc/modules.d/usb-net-asix-ax88179
 if echo $KERNEL_VERSION | grep -E '*\+$' ;then
-	echo "r8152" > ./etc/modules.d/usb-net-rtl8152
+	sudo echo "r8152" > ./etc/modules.d/usb-net-rtl8152
 else
-	echo "r8152" > ./etc/modules.d/usb-net-rtl8152
+	sudo echo "r8152" > ./etc/modules.d/usb-net-rtl8152
 fi
-[ -f ./etc/config/shairport-sync ] && [ -f ${SND_MOD} ] && cp ${SND_MOD} ./etc/modules.d/
-echo "r8188eu" > ./etc/modules.d/rtl8188eu
+[ -f ./etc/config/shairport-sync ] && [ -f ${SND_MOD} ] && sudo cp ${SND_MOD} ./etc/modules.d/
+sudo echo "r8188eu" > ./etc/modules.d/rtl8188eu
 
-rm -f ./etc/rc.d/S*dockerd
+sudo rm -f ./etc/rc.d/S*dockerd
 
 cd $TGT_ROOT/lib/modules/${KERNEL_VERSION}/
 find . -name '*.ko' -exec ln -sf {} . \;
-rm -f ntfs.ko
+sudo rm -f ntfs.ko
 
 cd $TGT_ROOT/sbin
 if [ ! -x kmod ];then
-	cp $KMOD .
+	sudo cp $KMOD .
 fi
-ln -sf kmod depmod
-ln -sf kmod insmod
-ln -sf kmod lsmod
-ln -sf kmod modinfo
-ln -sf kmod modprobe
-ln -sf kmod rmmod
-ln -sf /usr/bin/ntfs-3g mount.ntfs
+sudo ln -sf kmod depmod
+sudo ln -sf kmod insmod
+sudo ln -sf kmod lsmod
+sudo ln -sf kmod modinfo
+sudo ln -sf kmod modprobe
+sudo ln -sf kmod rmmod
+sudo ln -sf /usr/bin/ntfs-3g mount.ntfs
 
 cd $TGT_ROOT/lib/firmware
-mv *.hcd brcm/ 2>/dev/null
+sudo mv *.hcd brcm/ 2>/dev/null
 if [ -f "$REGULATORY_DB" ];then
-	tar xzf "$REGULATORY_DB"
+	sudo tar xzf "$REGULATORY_DB"
 fi
 
 cd brcm
 source $TGT_ROOT/usr/lib/armbian/armbian-common
 get_random_mac
-sed -e "s/macaddr=b8:27:eb:74:f2:6c/macaddr=${MACADDR}/" "brcmfmac43455-sdio.txt" > "brcmfmac43455-sdio.phicomm,n1.txt"
+sudo sed -e "s/macaddr=b8:27:eb:74:f2:6c/macaddr=${MACADDR}/" "brcmfmac43455-sdio.txt" > "brcmfmac43455-sdio.phicomm,n1.txt"
 
-rm -f ${TGT_ROOT}/etc/bench.log
-cat >> ${TGT_ROOT}/etc/crontabs/root << EOF
+sudo rm -f ${TGT_ROOT}/etc/bench.log
+sudo tee >> ${TGT_ROOT}/etc/crontabs/root << EOF
 17 3 * * * /etc/coremark.sh
 EOF
 
 [ -f $CPUSTAT_PATCH ] && \
 cd $TGT_ROOT/usr/lib/lua/luci/view/admin_status && \
-patch -p0 < ${CPUSTAT_PATCH}
+sudo patch -p0 < ${CPUSTAT_PATCH}
 
 # clean temp_dir
 cd $TEMP_DIR
-umount -f $LINUX_BOOT $LINUX_ROOT $TGT_BOOT $TGT_ROOT 
+sudo umount -f $LINUX_BOOT $LINUX_ROOT $TGT_BOOT $TGT_ROOT 
 
-( losetup -D && cd $WORK_DIR && rm -rf $TEMP_DIR && losetup -D)
-sync
+( sudo losetup -D && cd $WORK_DIR && sudo rm -rf $TEMP_DIR && sudo losetup -D)
+sudo sync
 echo
 echo "我䖈 N1 一千遍，N1 待我如初恋！"
 echo "镜像打包已完成，再见!"
