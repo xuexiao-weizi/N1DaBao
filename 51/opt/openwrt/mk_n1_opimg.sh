@@ -36,7 +36,8 @@ elif [ ${FLOWOFFLOAD_FLAG} -eq 1 ];then
     fi
 fi
 echo "Use $OPWRT_ROOTFS_GZ for openwrt rootfs!"
-
+# NEW UUID
+NEWUUID="n"
 # not used
 # BOOT_TGZ="/opt/kernel/boot-${KERNEL_VERSION}.tar.gz"
 # MODULES_TGZ="/opt/kernel/modules-${KERNEL_VERSION}.tar.gz"
@@ -147,6 +148,7 @@ cd $WORK_DIR
 TEMP_DIR=$(mktemp -p $WORK_DIR)
 rm -rf $TEMP_DIR
 mkdir -p $TEMP_DIR
+sudo chmod -R 777 $TEMP_DIR
 echo $TEMP_DIR
 
 # temp dir
@@ -162,6 +164,9 @@ sudo losetup -f -P $LNX_IMG
 BLK_DEV=$(sudo losetup | grep "$LNX_IMG" | head -n 1 | gawk '{print $1}')
 sudo mount -o ro ${BLK_DEV}p1 $LINUX_BOOT
 sudo mount -o ro ${BLK_DEV}p2 $LINUX_ROOT
+
+sudo chmod -R 777 ${BLK_DEV}p1
+sudo chmod -R 777 ${BLK_DEV}p2
 
 # mk tgt_img
 echo "创建空白的目标镜像文件 ..."
@@ -183,7 +188,7 @@ sudo parted $TGT_DEV mkpart primary fat32 ${BEGIN}b ${END}b
 BEGIN=$((END + 1))
 END=$((ROOTFS_MB * 1024 * 1024 + BEGIN -1))
 sudo parted $TGT_DEV mkpart primary btrfs ${BEGIN}b 100%
-sudo parted $TGT_DEV print 2>/dev/null
+sudo parted $TGT_DEV print
 sudo mkfs.vfat -n BOOT ${TGT_DEV}p1
 ROOTFS_UUID=$(uuidgen)
 echo "ROOTFS_UUID = $ROOTFS_UUID"
@@ -195,6 +200,9 @@ TGT_ROOT=${TEMP_DIR}/tgt_root
 sudo mkdir $TGT_BOOT $TGT_ROOT
 sudo mount -t vfat ${TGT_DEV}p1 $TGT_BOOT
 sudo mount -t btrfs -o compress=zstd ${TGT_DEV}p2 $TGT_ROOT
+
+sudo chmod -R 777 $TGT_BOOT
+sudo chmod -R 777 $TGT_ROOT
 
 # extract boot
 echo "boot 文件解包 ... "
@@ -245,26 +253,9 @@ sudo tee uEnv.txt >/dev/null  <<EOF
 LINUX=/zImage
 INITRD=/uInitrd
 
-# 下列 dtb，用到哪个就把哪个的#删除，其它的则加上 # 在行首
-# 用于斐讯 Phicomm N1 , 可写入EMMC
+
 FDT=/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
-# 用于斐讯 Phicomm N1 (thresh), 可写入EMMC
-#FDT=/dtb/amlogic/meson-gxl-s905d-phicomm-n1-thresh.dtb
 
-# 用于章鱼星球 (S912), 可写入EMMC
-#FDT=/dtb/amlogic/meson-gxm-octopus-planet.dtb
-
-# *****  下列盒子只能在U盘或TF卡上体验，不能写入EMMC 
-# 用于 X96 Max (S905X2)
-#FDT=/dtb/amlogic/meson-g12a-x96-max.dtb
-
-# 用于 X96 Max+ (S905X3 网卡工作于 100m)
-#FDT=/dtb/amlogic/meson-sm1-x96-max-plus-100m.dtb
-# 用于 X96 Max+ (S905X3 网卡工作于 1000M)
-#FDT=/dtb/amlogic/meson-sm1-x96-max-plus.dtb
-
-# 用于 HK1 BoX (S905X3 网卡工作于 1000M)
-#FDT=/dtb/amlogic/meson-sm1-hk1box-vontar-x3.dtb
 
 APPEND=root=UUID=${ROOTFS_UUID} rootfstype=btrfs rootflags=compress=zstd console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0 fsck.fix=yes fsck.repair=yes net.ifnames=0 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory swapaccount=1
 EOF
@@ -277,6 +268,7 @@ cat uEnv.txt
 
 echo "修改根文件系统相关配置 ... "
 # modify root
+sudo chmod -R 777 $TGT_ROOT
 cd $TGT_ROOT
 
 [ -f $BTLD_BIN ] && sudo cp $BTLD_BIN root/
@@ -367,6 +359,7 @@ EOF
 fi
 
 sudo chmod 755 ./etc/init.d/*
+sudo chmod  -R 777 ./etc
 
 sudo sed -e "s/START=25/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
 sudo sed -e "s/START=90/START=99/" -i ./etc/init.d/dockerd 2>/dev/null
@@ -374,7 +367,7 @@ sudo sed -e "s/option wan_mode 'false'/option wan_mode 'true'/" -i ./etc/config/
 sudo mv -f ./etc/rc.d/S??dockerd ./etc/rc.d/S99dockerd 2>/dev/null
 sudo rm -f ./etc/rc.d/S80nginx 2>/dev/null
 
-sudo tee > ./etc/fstab <<EOF
+sudo tee > ./etc/fstab >/dev/null <<EOF
 UUID=${ROOTFS_UUID} / btrfs compress=zstd 0 1
 LABEL=BOOT /boot vfat defaults 0 2
 #tmpfs /tmp tmpfs defaults,nosuid 0 0
@@ -382,7 +375,7 @@ EOF
 echo "/etc/fstab --->"
 cat ./etc/fstab
 
-sudo tee > ./etc/config/fstab <<EOF
+sudo tee > ./etc/config/fstab >/dev/null <<EOF
 config global
         option anon_swap '0'
         option auto_swap '0'
@@ -462,10 +455,14 @@ fi
 cd brcm
 source $TGT_ROOT/usr/lib/armbian/armbian-common
 get_random_mac
+echo "new macaddr->"
+echo ${MACADDR}
 sudo sed -e "s/macaddr=b8:27:eb:74:f2:6c/macaddr=${MACADDR}/" "brcmfmac43455-sdio.txt" > "brcmfmac43455-sdio.phicomm,n1.txt"
 
 sudo rm -f ${TGT_ROOT}/etc/bench.log
-sudo tee >> ${TGT_ROOT}/etc/crontabs/root << EOF
+echo "/etc/crontabs/root->" 
+echo ${TGT_ROOT}/etc/crontabs/root
+sudo tee ${TGT_ROOT}/etc/crontabs/root >/dev/null <<EOF
 17 3 * * * /etc/coremark.sh
 EOF
 
@@ -478,7 +475,7 @@ cd $TEMP_DIR
 sudo umount -f $LINUX_BOOT $LINUX_ROOT $TGT_BOOT $TGT_ROOT 
 
 ( sudo losetup -D && cd $WORK_DIR && sudo rm -rf $TEMP_DIR && sudo losetup -D)
-sudo sync
+sync
 echo
 echo "我䖈 N1 一千遍，N1 待我如初恋！"
 echo "镜像打包已完成，再见!"
