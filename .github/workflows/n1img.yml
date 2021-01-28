@@ -51,7 +51,7 @@ jobs:
           echo "set the flippy 51+o"
           echo "FLIPPY_FILEID=${{ secrets.FLIPPY_51_FILEID }}"  >> $GITHUB_ENV
         fi
-        version=$(curl -s "https://api.github.com/repos/wgedu/build-openwrt/releases/latest" | awk -F '"' '/tag_name/{print $4}')
+        version=$(curl -s "https://api.github.com/repos/xuexiao-weizi/openwrt/releases/latest" | awk -F '"' '/tag_name/{print $4}')
         
         echo "version=$version"  >> $GITHUB_ENV
         echo "DATE=$(date "+%Y-%m-%d %H:%M:%S")"  >> $GITHUB_ENV
