@@ -512,10 +512,10 @@ SFE_FLAG=${SFE_FLAG}
 FLOWOFFLOAD_FLAG=${FLOWOFFLOAD_FLAG}
 EOF
 
-if [ $K510 -eq 1 ];then
+if [ $K510 -eq 1 ];then 
     sudo bash -c 'cat > ./etc/flippy-openwrt-release <<EOF
 UBOOT_OVERLOAD=${UBOOT_WITHOUT_FIP}
-EOF
+EOF'
 fi
 
 cd $TGT_ROOT/lib/modules/${KERNEL_VERSION}/
