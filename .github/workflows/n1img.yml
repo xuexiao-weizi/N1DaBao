@@ -27,9 +27,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - flippy_name: 38	
-            flippy_filename: Armbian_20.02.0_Aml-s9xxx_buster_5.4.50-flippy-38+o.img.xz	
-            release_name: N1_38_Openwrt.img
+          - flippy_name: 53	
+            flippy_filename: Armbian_20.02.0_Aml-s9xxx_buster_5.4.98-flippy-53+o.img.xz	
+            release_name: N1_53_Openwrt.img
           - flippy_name: 51
             flippy_filename: Armbian_20.10_Aml-s9xxx_buster_5.4.86-flippy-51+o.img.xz
             release_name: N1_51_Openwrt.img
@@ -45,8 +45,8 @@ jobs:
       run: |     
         if [[ $FLIPPY_NAME = "38" ]]; 
         then
-          echo "set the flippy 38+o"
-          echo "FLIPPY_FILEID=${{ secrets.FLIPPY_38_FILEID }}"  >> $GITHUB_ENV
+          echo "set the flippy 53+o"
+          echo "FLIPPY_FILEID=${{ secrets.FLIPPY_53_FILEID }}"  >> $GITHUB_ENV
         else
           echo "set the flippy 51+o"
           echo "FLIPPY_FILEID=${{ secrets.FLIPPY_51_FILEID }}"  >> $GITHUB_ENV
