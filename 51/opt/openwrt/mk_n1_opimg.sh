@@ -150,7 +150,7 @@ fi
 #else
 #	echo "mkfs.vfat 程序不存在，请安装 dosfstools"
 #	exit 1
-fi
+#fi
 
 if uuidgen>/dev/null;then
 	echo "check uuidgen ok"
