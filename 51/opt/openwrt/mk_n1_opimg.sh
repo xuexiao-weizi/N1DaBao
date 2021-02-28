@@ -8,7 +8,8 @@ fi
 # 源镜像文件
 ##########################################################################
 OPENWRT_VER="R21.2.1"
-KERNEL_VERSION="5.4.98-flippy-53+o"
+KERNEL_VERSION="5.4.86-flippy-51+o"
+#KERNEL_VERSION="5.4.98-flippy-53+o"
 #KERNEL_VERSION="5.9.16-flippy-51+"
 #KERNEL_VERSION="5.10.16-flippy-53+"
 
